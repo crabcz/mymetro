@@ -1,0 +1,339 @@
+HOST: metro-internal-mymetro/api/v1
+
+--- MyMetro ACWS API ---
+---
+Welcome to API of MSB used for ACWS.
+This API describes the data requested by the Advanced customer web site (ACWS) from Metro Service Bus (MSB) for the pilot and master implementations.
+
+Please note that this format is currently only proposal of expected functionality. We expect feedback for the following topics:
+
+- if the data requested is available
+ - if the data structure is possible
+ - if the JSON format is supported by MyMetro (we can use XML)
+
+please use the apiary.io comments or e-mail them to [matyas.rak@actum.cz](mailto:matyas.rak@actum.cz)
+
+# Usage information
+This API is proposed accordingly to the concept "Automated, Dynamic and Realtime Targeting on Advanced Website" (Targeted_Content_Concept_v3_ca.pdf) document written by Clyde Araujo, may 2013.
+
+All the user information provided by the API is used for content personalization and promotional targeting and is stored in the ACWS only for caching purposes to leverage time cost to gather the data from the backend systems.
+The API will be called after the user has been authenticated in order to get personalization information by providing either email or ID. Currently, it is not known which will be provided by the authentication backend.
+The API will be called only once and results will be cached on the ACWS for certain period of time, initially 1 week.
+
+# Implementation and integration notes
+The API will be implemented by migrating data of current users to a document database. On top of the database will run a proxy API service, which will relay the information to the ACWS WCM.
+
+# General API practices and standards
+Current API design proposal is a REST api expecting GET requrests and responses in JSON format encoded in utf-8 encoding.
+
+ - attribute naming convention is "lowercase_with_underscores". This makes it easier for JSON encoding and preserves readability.
+ - the response data structure is supposet to be kept intact. If no data is available for a key, a *NULL* value is presented instead
+ - status codes are returned in HTTP header, some basic are:
+    - 200 OK
+    - 500 Server error
+    - 404 Not found
+ - in case of error, please include a meaningful description in the "errors" key
+
+# Request parameters
+The request is a HTTP GET request. Possible request parameters:
+
+## email
+email request parameter contains user email, supposing that it is a unique identifier
+
+## id
+id request parameter contains user mymetro ID, supposing that it is a unique identifie
+
+Only one of *email* or *id* parameters will be present.
+
+## advanced
+A switch between advanced mode and basic mode. Can have values *true* or *false*. Defaults to *true*.
+
+
+# Response
+Response is a JSON file with the following structure. Note, that the *advanced* key is not available only when the *advanced=false* parameter is present: 
+
+    {
+        "errors": null,
+    	"result": {
+    		"personal": {
+                "id":"UA_MSYS_MYM_1",
+    			"country": "CZ",
+    			"age": 32,
+    			"gender": "M",
+    			"name": "John Doe",
+    			"email": "jdoe@gmail.com",
+    			"branch": 3,
+    			"size": "A",
+    			"loyalty": "gold",
+    			"address": {
+    				"city": "Kladno",
+    				"street": "Namesti miru 19",
+    				"country": "CZ"
+    			},
+    			"registration_date": "2013-01-17T12:43:00+01:00",
+    		},
+    		"advanced" : {
+    			"lifecycle": "new",
+    			"order_history": [
+    				{
+    					"id": "123123ai93",
+    					"date": "2013-01-17T12:43:00+01:00",
+    					"items": [
+    						{
+    							"id": "929381239109a-2013",
+    							"name": "apple",
+    							"category": "fruit",
+    							"quantity": "20",
+    							"unit": "kg"
+    						},
+    						{
+    							"id": "929381239109b-2013",
+    							"name": "pear",
+    							"category": "fruit",
+    							"quantity": "20",
+    							"unit": "kg"
+    						},
+    					],
+    				}
+    			],
+    			"service_history": [
+    				{
+    					"id": "1231231313",
+    					"name": "shop organization course",
+    					"date": "2013-04-12",
+    					"result": "passed"
+    				}
+    			],
+    			"loyalty": "gold",
+    			"preferred_contact_channel": "e-mail",
+    			"campaigns_targeted": [
+    				{
+    					"id": "food-2013-02",
+    					"name": "Frequent food buyers campaign 01",
+    				}
+    			],
+    			"store": {
+    				"id": "some-id",
+    				"name": "Makro Praha",
+    				"city": "Praha",
+    				"lat": 52.12313333,
+    				"lng": 10.45034911
+    			}
+    		}
+    	}
+    }
+
+
+
+# Notable response fields
+The enumerations used in the result JSON are:
+
+gender
+--
+a string value consisting of "M" for male, "F" for female and null if not known or undefined
+
+branch
+--
+which is a structure composed by an id and a textual name. Typical values are:
+
+`{ "id": 1, "name": "Trader" }`,
+`{ "id": 2, "name": "HoReCa" }`,
+`{ "id": 3, "name": "SCO" }`
+
+etc.
+
+## size
+Size is an enumeration value provided as an *A*, *B* or *C* according to Marketing personalization strategy guideline
+
+## loyalty
+
+Loyalty is indication of current user loyalty status, values are:
+
+  - blue
+  - silver
+  - gold
+  - platinum
+
+# Advanced fields
+The advanced response contains in addition the following data:
+
+## lifecycle
+Lifecycle stage. Values accordingly to marketing specification with values:
+
+ - new
+ - active
+ - dying
+ - outflow
+
+## store
+the object containing the store information. Expected store information contains:
+
+ - store name
+ - store city
+ - longitude and latitude of store (to be used for spatial personalization)
+
+## preferred_contact_channel
+can have a value of 
+
+ - phone
+ - mobile
+ - email
+ - fax
+
+## List elements
+All the list elements are returned as *arrays* if any number of records is available. If no records are available, the items are returned as empty *arrays*.
+
+### service_history
+History of courses the customer appllied for
+
+### campaigns_targeted
+List of campaigns the user was target of. The campaign must contain both a unique identifier and readable name
+
+### order_history
+Previous purchasing behavior. The list is supposed to contain a **number** (propose 10) of order items, each containing:
+
+ - identifier
+ - date of purchase
+ - list of purchased items, each consisting of
+    - product identifier
+    - product category (ideally both identifier and textual representation)
+    - quantity
+    - unit (piece, kg, litre)
+    - (optionally price)
+
+We expect the orders to be pre-sorted by purchase date in descending order
+
+
+---
+
+-- 
+Customer user data examples and mockup
+Only customer user data manipulation is required by the ACWS
+--
+
+Get a response with basic customer data. 
+---
+
+Basic functionality for pilot country implementation, that is due Q4
+Only the "personal" key is returned
+
+GET /customer?advanced=false&email=jdoe%40gmail.com
+> Accept: application/json
+< 200
+< Content-type: application/json; charset=utf8
+{
+    "errors": null,
+	"result": {
+		"personal": {
+            "id":"UA_MSYS_MYM_1",
+			"country": "CZ",
+			"age": 32,
+			"gender": "M",
+			"name": "John Doe",
+			"email": "jdoe@gmail.com",
+			"address": {
+    			"city": "Kladno",
+				"street": "Namesti miru 19",
+				"country": "CZ"
+			},
+			"registration_date": "2013-01-17T12:43:00+01:00",
+			"loyalty": "gold",
+            "branch": {
+                "id": 3,
+                "name": "SCO"
+    		},
+			"size": "A"
+		}
+	}
+}
+
+
+Get advanced customer data used for personalization
+---
+
+This is a full featured API call that is due Q2 2014
+
+The result object always contains the "advanced" key, along with the "personal" key 
+
+GET /user?id=UA_MSYS_MYM_1
+> Accept: application/json
+< 200
+< Content-type: application/json; charset=utf8
+{
+	"errors": null,
+	"result": {
+		"personal": {
+            "id":"UA_MSYS_MYM_1",
+			"country": "CZ",
+			"age": 32,
+			"gender": "M",
+			"name": "John Doe",
+			"email": "jdoe@gmail.com",
+			"branch": 3,
+			"size": "A",
+			"registration_date": "2013-01-17T12:43:00+01:00",
+			"loyalty": "gold",
+			"address": {
+				"city": "Kladno",
+				"street": "Namesti miru 19",
+				"country": "CZ"
+			},
+			"registration_date": "2013-01-17T12:43:00+01:00",
+			"address": {
+				"city": "Kladno",
+				"street": "Namesti miru 19",
+				"country": "CZ"
+			},
+		},
+		"advanced" : {
+			"lifecycle": "new",
+			"order_history": [
+				{
+					"id": "123123ai93",
+					"date": "2013-01-17T12:43:00+01:00",
+					"items": [
+						{
+							"id": "929381239109a-2013",
+							"name": "apple",
+							"category": "fruit",
+							"quantity": "20",
+							"unit": "kg"
+						},
+						{
+							"id": "929381239109b-2013",
+							"name": "pear",
+							"category": "fruit",
+							"quantity": "20",
+							"unit": "kg"
+						},
+					],
+				}
+			],
+			"service_history": [
+				{
+					"id": "1231231313",
+					"name": "shop organization course",
+					"date": "2013-04-12",
+					"result": "passed"
+				}
+			],
+			"loyalty": "gold",
+			"preferred_contact_channel": "e-mail",
+			"campaigns_targeted": [
+				{
+					"id": "food-2013-02",
+					"name": "Frequent food buyers campaign 01",
+				}
+			],
+			"store": {
+				"id": "some-id",
+				"name": "Makro Praha",
+				"city": "Praha",
+				"lat": 52.12313333,
+				"lng": 10.45034911
+			}
+		}
+	}
+}
+
+
